@@ -2,11 +2,10 @@ import os
 import sys
 import signal
 import asyncio
-import sqlite3
 import requests
 from bs4 import BeautifulSoup
 from pyrogram import Client, filters
-from pyrogram.raw import functions
+from pyrogram.errors import UsernameNotOccupied, UsernameInvalid
 
 # ---------- Graceful shutdown (Heroku) ----------
 def shutdown_handler(sig, frame):
@@ -27,33 +26,18 @@ if not API_ID or not API_HASH or not BOT_TOKEN:
 # ---------- Pyrogram client ----------
 app = Client("username_hunter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# ---------- DB (for future wishlist/history) ----------
-DB = "data.db"
-
-def init_db():
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("""CREATE TABLE IF NOT EXISTS wishlist (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id INTEGER,
-        username TEXT,
-        last_status TEXT,
-        last_price TEXT
-    )""")
-    con.commit()
-    con.close()
-
-# ---------- Telegram availability (robust) ----------
+# ---------- Telegram availability (BOT-SAFE) ----------
 async def check_telegram(client, username: str):
     try:
-        res = await client.invoke(
-            functions.account.CheckUsername(username=username)
-        )
-        # True => available, False => taken
-        return "free" if res else "taken"
+        await client.get_chat(username)
+        return "taken"
+    except UsernameNotOccupied:
+        return "free"
+    except UsernameInvalid:
+        return "invalid"
     except Exception as e:
-        print("TG check error:", e)
-        # Ambiguous / error => treat as taken (safe)
+        print("TG check error (bot-safe):", e)
+        # Ambiguous / multiple matches / private => taken (safe default)
         return "taken"
 
 # ---------- Fragment checker (HTML scrape) ----------
@@ -73,10 +57,8 @@ def check_fragment(username: str):
         status = "not listed"
         price = None
 
-        # Heuristics (Fragment page structure changes sometimes)
         if "for sale" in page_text or "buy" in page_text:
             status = "for sale"
-            # Try to find TON price text
             for el in soup.find_all(["span", "div"]):
                 t = el.get_text(strip=True)
                 if t and "ton" in t.lower():
@@ -131,10 +113,9 @@ async def handler(client, message):
 
 # ---------- App runner ----------
 async def main():
-    init_db()
     await app.start()
     print("Username Hunter Bot running...")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    app.run(main()) 
+    app.run(main())
