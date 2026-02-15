@@ -2,8 +2,8 @@ import os
 import sys
 import signal
 import asyncio
+import re
 import requests
-from bs4 import BeautifulSoup
 from pyrogram import Client, filters
 from pyrogram.errors import UsernameNotOccupied, UsernameInvalid
 
@@ -37,34 +37,29 @@ async def check_telegram(client, username: str):
         return "invalid"
     except Exception as e:
         print("TG check error (bot-safe):", e)
-        # Ambiguous / multiple matches / private => taken (safe default)
-        return "taken"
+        return "taken"  # ambiguous/multi-match/private => taken
 
-# ---------- Fragment checker (HTML scrape) ----------
+# ---------- Fragment checker (Heroku-friendly, clean price) ----------
 def check_fragment(username: str):
     url = f"https://fragment.com/username/{username}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; UsernameHunterBot/1.0)"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (UsernameHunterBot/1.0)"}
+
     try:
         r = requests.get(url, headers=headers, timeout=20)
         if r.status_code != 200:
             return {"status": "unknown", "price": None}
 
-        soup = BeautifulSoup(r.text, "html.parser")
-        page_text = soup.get_text(" ").lower()
+        html = r.text.lower()
 
         status = "not listed"
         price = None
 
-        if "for sale" in page_text or "buy" in page_text:
+        if "place bid" in html or "for sale" in html:
             status = "for sale"
-            for el in soup.find_all(["span", "div"]):
-                t = el.get_text(strip=True)
-                if t and "ton" in t.lower():
-                    price = t
-                    break
-        elif "sold" in page_text:
+            m = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*ton", html)
+            if m:
+                price = f"{m.group(1)} TON"
+        elif "sold" in html:
             status = "sold"
 
         return {"status": status, "price": price}
