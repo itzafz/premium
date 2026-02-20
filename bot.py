@@ -1,5 +1,5 @@
 import os, io, requests, random
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
@@ -41,7 +41,7 @@ def fetch_ton_from_cmc():
         "id": "toncoin",
         "name": "Toncoin",
         "symbol": "TON",
-        "current_price": data["price"],
+        "current_price": float(data["price"]),
         "price_change_percentage_24h": data["percent_change_24h"],
         "total_volume": data["volume_24h"],
         "image": "https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png"
@@ -51,7 +51,7 @@ def fetch_ton_from_cmc():
 def fetch_ton_from_tonapi():
     r = requests.get(TON_API_URL, timeout=10)
     r.raise_for_status()
-    price = r.json()["rates"]["ton"]["prices"]["usd"]
+    price = float(r.json()["rates"]["ton"]["prices"]["usd"])
 
     return {
         "id": "toncoin",
@@ -74,33 +74,39 @@ def load_font(size):
 
 
 def cinematic_bg(w, h):
-    base = Image.new("RGB", (w, h), "#050811")
+    base = Image.new("RGB", (w, h), "#060916")
     draw = ImageDraw.Draw(base)
 
     for y in range(h):
-        r = int(5 + (20-5) * (y/h))
-        g = int(8 + (24-8) * (y/h))
-        b = int(17 + (50-17) * (y/h))
+        r = int(6 + (28-6) * (y/h))
+        g = int(9 + (36-9) * (y/h))
+        b = int(22 + (68-22) * (y/h))
         draw.line((0, y, w, y), fill=(r, g, b))
 
     glow = Image.new("RGBA", (w, h), (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
-    for _ in range(6):
+    for _ in range(8):
         cx = random.randint(0, w)
         cy = random.randint(0, h)
-        radius = random.randint(180, 320)
-        color = random.choice([(56,189,248,90), (168,85,247,90)])
+        radius = random.randint(220, 380)
+        color = random.choice([(56,189,248,80), (168,85,247,80), (34,197,94,70)])
         gdraw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=color)
-    glow = glow.filter(ImageFilter.GaussianBlur(60))
+    glow = glow.filter(ImageFilter.GaussianBlur(80))
+
+    noise = Image.effect_noise((w, h), 12).convert("L")
+    noise = ImageChops.multiply(noise, Image.new("L", (w, h), 40))
+    noise = noise.convert("RGBA")
+
     base = Image.alpha_composite(base.convert("RGBA"), glow)
+    base = Image.alpha_composite(base, noise)
     return base
 
 
-def neon_card(base, box, glow_color=(56,189,248)):
+def neon_card(base, box, glow_color=(168,85,247)):
     glow = Image.new("RGBA", base.size, (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
-    gdraw.rounded_rectangle(box, radius=28, fill=glow_color+(90,))
-    glow = glow.filter(ImageFilter.GaussianBlur(26))
+    gdraw.rounded_rectangle(box, radius=32, fill=glow_color+(90,))
+    glow = glow.filter(ImageFilter.GaussianBlur(32))
     base.alpha_composite(glow)
 
 
@@ -112,7 +118,7 @@ def human(n):
     if n >= 1e9: return f"{n/1e9:.2f}B"
     if n >= 1e6: return f"{n/1e6:.2f}M"
     if n >= 1e3: return f"{n/1e3:.2f}K"
-    return str(n)
+    return str(int(n))
 
 
 def generate_image(data):
@@ -138,7 +144,7 @@ def generate_image(data):
         box = (cx, cy, cx+card_w, cy+card_h)
 
         neon_card(bg, box, (168,85,247))
-        draw.rounded_rectangle(box, radius=28, fill=(11,16,32,235), outline=(56,189,248,220), width=3)
+        draw.rounded_rectangle(box, radius=32, fill=(14,20,38,220), outline=(56,189,248,200), width=2)
 
         try:
             logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA").resize((60,60))
@@ -147,7 +153,14 @@ def generate_image(data):
             pass
 
         draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (235,245,255,255), 2)
-        draw_thick_text(draw, (cx+24, cy+92), f"${coin['current_price']:,}", price_font, (168,85,247,255), 3)
+
+        price_val = coin['current_price']
+        if coin["id"] == "toncoin":
+            price_text = f"${price_val:.4f}"
+        else:
+            price_text = f"${price_val:,}"
+
+        draw_thick_text(draw, (cx+24, cy+92), price_text, price_font, (168,85,247,255), 3)
 
         ch = coin.get("price_change_percentage_24h", 0) or 0
         arrow = "▲" if ch >= 0 else "▼"
@@ -175,7 +188,6 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ton = fetch_ton_from_cmc()
             except:
                 ton = None
-
             if not ton:
                 ton = fetch_ton_from_tonapi()
 
@@ -183,7 +195,7 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data.append(ton)
 
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON verified source)")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON 4 decimals)")
 
     except Exception as e:
         await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
@@ -191,7 +203,7 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — premium crypto dashboard with TON 🔥")
+    await update.message.reply_text("Send /prices — stylish dashboard with TON (4 decimals) 💎")
 
 
 def main():
