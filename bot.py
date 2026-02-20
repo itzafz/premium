@@ -195,10 +195,10 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data.append(ton)
 
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON 4 decimals)")
+        await update.message.reply_photo(photo=img, caption="")
 
     except Exception as e:
-        await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
+        await update.message.reply_text("faaa, error")
         print(e)
 
 
