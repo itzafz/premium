@@ -102,12 +102,46 @@ def cinematic_bg(w, h):
     return base
 
 
-def neon_card(base, box, glow_color=(168,85,247)):
+def gradient_card_layer(size, top_color=(16, 24, 46, 230), bottom_color=(10, 16, 32, 230), radius=28):
+    w, h = size
+    layer = Image.new("RGBA", (w, h), (0,0,0,0))
+    draw = ImageDraw.Draw(layer)
+
+    for y in range(h):
+        t = y / h
+        r = int(top_color[0] * (1-t) + bottom_color[0] * t)
+        g = int(top_color[1] * (1-t) + bottom_color[1] * t)
+        b = int(top_color[2] * (1-t) + bottom_color[2] * t)
+        a = int(top_color[3] * (1-t) + bottom_color[3] * t)
+        draw.line((0, y, w, y), fill=(r, g, b, a))
+
+    mask = Image.new("L", (w, h), 0)
+    mdraw = ImageDraw.Draw(mask)
+    mdraw.rounded_rectangle((0,0,w,h), radius=radius, fill=255)
+    layer.putalpha(mask)
+    return layer
+
+
+def professional_card(base, box):
+    x1, y1, x2, y2 = box
+    w, h = x2-x1, y2-y1
+
     glow = Image.new("RGBA", base.size, (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
-    gdraw.rounded_rectangle(box, radius=32, fill=glow_color+(90,))
-    glow = glow.filter(ImageFilter.GaussianBlur(32))
+    gdraw.rounded_rectangle(box, radius=28, fill=(99,102,241,70))
+    glow = glow.filter(ImageFilter.GaussianBlur(22))
     base.alpha_composite(glow)
+
+    layer = gradient_card_layer((w, h))
+    base.alpha_composite(layer, (x1, y1))
+
+    draw = ImageDraw.Draw(base)
+    draw.rounded_rectangle(box, radius=28, outline=(56,189,248,180), width=2)
+
+    highlight = Image.new("RGBA", (w, h), (255,255,255,0))
+    hdraw = ImageDraw.Draw(highlight)
+    hdraw.rounded_rectangle((2,2,w-2,h//3), radius=26, fill=(255,255,255,20))
+    base.alpha_composite(highlight, (x1, y1))
 
 
 def draw_thick_text(draw, xy, text, font, fill, stroke_width=2):
@@ -143,50 +177,8 @@ def generate_image(data):
         cy = 190 + (i // cols) * (card_h + pad)
         box = (cx, cy, cx+card_w, cy+card_h)
 
-        def gradient_card_layer(size, top_color=(16, 24, 46, 230), bottom_color=(10, 16, 32, 230), radius=28):
-    w, h = size
-    layer = Image.new("RGBA", (w, h), (0,0,0,0))
-    draw = ImageDraw.Draw(layer)
+        professional_card(bg, box)
 
-    for y in range(h):
-        t = y / h
-        r = int(top_color[0] * (1-t) + bottom_color[0] * t)
-        g = int(top_color[1] * (1-t) + bottom_color[1] * t)
-        b = int(top_color[2] * (1-t) + bottom_color[2] * t)
-        a = int(top_color[3] * (1-t) + bottom_color[3] * t)
-        draw.line((0, y, w, y), fill=(r, g, b, a))
-
-    mask = Image.new("L", (w, h), 0)
-    mdraw = ImageDraw.Draw(mask)
-    mdraw.rounded_rectangle((0,0,w,h), radius=radius, fill=255)
-    layer.putalpha(mask)
-    return layer
-
-
-def professional_card(base, box):
-    x1, y1, x2, y2 = box
-    w, h = x2-x1, y2-y1
-
-    # soft glow (controlled)
-    glow = Image.new("RGBA", base.size, (0,0,0,0))
-    gdraw = ImageDraw.Draw(glow)
-    gdraw.rounded_rectangle(box, radius=28, fill=(99,102,241,70))  # indigo glow
-    glow = glow.filter(ImageFilter.GaussianBlur(22))
-    base.alpha_composite(glow)
-
-    # gradient fill
-    layer = gradient_card_layer((w, h))
-    base.alpha_composite(layer, (x1, y1))
-
-    # clean border
-    draw = ImageDraw.Draw(base)
-    draw.rounded_rectangle(box, radius=28, outline=(56,189,248,180), width=2)
-
-    # subtle top highlight
-    highlight = Image.new("RGBA", (w, h), (255,255,255,0))
-    hdraw = ImageDraw.Draw(highlight)
-    hdraw.rounded_rectangle((2,2,w-2,h//3), radius=26, fill=(255,255,255,20))
-    base.alpha_composite(highlight, (x1, y1))
         try:
             logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA").resize((60,60))
             bg.alpha_composite(logo, (cx+24, cy+18))
@@ -236,15 +228,15 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data.append(ton)
 
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON 4 decimals)")
 
     except Exception as e:
-        await update.message.reply_text("faaa, error")
+        await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
         print(e)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — stylish dashboard with TON (4 decimals) 💎")
+    await update.message.reply_text("Send /prices — premium gradient dashboard with TON 💎")
 
 
 def main():
