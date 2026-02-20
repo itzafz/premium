@@ -1,4 +1,4 @@
-import os, io, requests, math, random
+import os, io, requests, random
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -35,14 +35,12 @@ def cinematic_bg(w, h):
     base = Image.new("RGB", (w, h), "#050811")
     draw = ImageDraw.Draw(base)
 
-    # Gradient
     for y in range(h):
         r = int(5 + (20-5) * (y/h))
         g = int(8 + (24-8) * (y/h))
         b = int(17 + (50-17) * (y/h))
         draw.line((0, y, w, y), fill=(r, g, b))
 
-    # Glow orbs
     glow = Image.new("RGBA", (w, h), (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
     for _ in range(6):
@@ -83,7 +81,7 @@ def generate_image(data):
     meta_font  = load_font(22)
 
     draw_thick_text(draw, (64, 36), "⚡ Crypto Dashboard", title_font, (230,240,255,255), 3)
-    draw_thick_text(draw, (64, 124), "Live market snapshot • 24h change & volume", sub_font, (170,190,220,255), 2)
+    draw_thick_text(draw, (64, 124), "Live market snapshot • 24h Change & Volume", sub_font, (170,190,220,255), 2)
 
     cols = 3
     pad = 36
@@ -106,6 +104,7 @@ def generate_image(data):
             pass
 
         draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (235,245,255,255), 2)
+
         price = f"${coin['current_price']:,}"
         draw_thick_text(draw, (cx+24, cy+92), price, price_font, (168,85,247,255), 3)
 
@@ -125,14 +124,20 @@ def generate_image(data):
 async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = fetch_prices()
+
+        # Ensure TON price present
+        ids = [d["id"] for d in data]
+        if "toncoin" not in ids:
+            data.append({"id":"toncoin","name":"Toncoin","symbol":"TON","current_price":0,"price_change_percentage_24h":0,"total_volume":0,"image":""})
+
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON + 24h % + Volume)")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON included)")
     except Exception as e:
         await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
         print(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — premium 16:9 crypto dashboard image milega 📸")
+    await update.message.reply_text("Send /prices — updated premium dashboard with TON price 📸")
 
 def main():
     token = os.environ.get("BOT_TOKEN")
