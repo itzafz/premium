@@ -1,4 +1,4 @@
-import os, io, requests, random, math
+import os, io, requests, random
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -55,78 +55,74 @@ def fetch_ton_from_tonapi():
         "image": "https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png"
     }
 
-# ---------- UI HELPERS ----------
+# ---------- UI ----------
 
 def load_font(size):
-    for path in ("assets/Inter-Black.ttf", "assets/DejaVuSans-Bold.ttf", "assets/Inter-Bold.ttf"):
+    for path in ("assets/Inter-Regular.ttf", "assets/Inter-Bold.ttf", "assets/DejaVuSans.ttf"):
         try: return ImageFont.truetype(path, size)
         except: pass
     return ImageFont.load_default()
 
-def cinematic_bg(w, h):
-    base = Image.new("RGB", (w, h), "#060916")
+def dreamy_bg(w, h):
+    base = Image.new("RGB", (w, h), "#eaf4ff")
     draw = ImageDraw.Draw(base)
     for y in range(h):
         t = y / h
         col = (
-            int(8 + 30*t),
-            int(10 + 35*t),
-            int(28 + 70*t),
+            int(234*(1-t) + 210*t),
+            int(244*(1-t) + 225*t),
+            int(255*(1-t) + 245*t),
         )
         draw.line((0, y, w, y), fill=col)
 
-    glow = Image.new("RGBA", (w, h), (0,0,0,0))
-    gdraw = ImageDraw.Draw(glow)
-    for _ in range(10):
-        cx, cy = random.randint(0, w), random.randint(0, h)
-        r = random.randint(220, 420)
-        c = random.choice([(56,189,248,90), (168,85,247,90), (34,197,94,70)])
-        gdraw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=c)
-    glow = glow.filter(ImageFilter.GaussianBlur(90))
-    return Image.alpha_composite(base.convert("RGBA"), glow)
+    haze = Image.new("RGBA", (w, h), (255,255,255,0))
+    hdraw = ImageDraw.Draw(haze)
+    for _ in range(8):
+        cx, cy = random.randint(0,w), random.randint(0,h)
+        r = random.randint(180, 300)
+        hdraw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=(255,255,255,30))
+    haze = haze.filter(ImageFilter.GaussianBlur(40))
+    return Image.alpha_composite(base.convert("RGBA"), haze)
 
-def neon_gradient_card_layer(size, radius=28):
-    w, h = size
-    layer = Image.new("RGBA", (w, h), (0,0,0,0))
+def pastel_card_layer(size, radius=28):
+    w,h = size
+    layer = Image.new("RGBA", (w,h), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
     for y in range(h):
-        t = y / h
-        r = int(120 + 60*math.sin(t*math.pi))
-        g = int(100 + 120*t)
-        b = int(180 + 60*(1-t))
-        a = 210
-        draw.line((0, y, w, y), fill=(r, g, b, a))
-    mask = Image.new("L", (w, h), 0)
+        t = y/h
+        col = (
+            int(210*(1-t) + 230*t),
+            int(235*(1-t) + 245*t),
+            int(255*(1-t) + 235*t),
+            220
+        )
+        draw.line((0,y,w,y), fill=col)
+
+    mask = Image.new("L", (w,h), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0,0,w,h), radius=radius, fill=255)
     layer.putalpha(mask)
     return layer
 
-def creative_neon_card(base, box):
+def soft_card(base, box):
     x1,y1,x2,y2 = box
     w,h = x2-x1, y2-y1
 
-    glow = Image.new("RGBA", base.size, (0,0,0,0))
-    g = ImageDraw.Draw(glow)
-    g.rounded_rectangle(box, radius=30, fill=(99,102,241,120))
-    g.rounded_rectangle((x1+6,y1+6,x2-6,y2-6), radius=26, fill=(56,189,248,80))
-    glow = glow.filter(ImageFilter.GaussianBlur(28))
-    base.alpha_composite(glow)
+    shadow = Image.new("RGBA", base.size, (0,0,0,0))
+    sdraw = ImageDraw.Draw(shadow)
+    sdraw.rounded_rectangle((x1+6,y1+10,x2+6,y2+10), radius=26, fill=(0,0,0,40))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(18))
+    base.alpha_composite(shadow)
 
-    layer = neon_gradient_card_layer((w,h), radius=28)
+    layer = pastel_card_layer((w,h), radius=26)
     base.alpha_composite(layer, (x1,y1))
 
     draw = ImageDraw.Draw(base)
-    draw.rounded_rectangle(box, radius=28, outline=(56,189,248,220), width=2)
-
-    shine = Image.new("RGBA", (w,h), (255,255,255,0))
-    sdraw = ImageDraw.Draw(shine)
-    sdraw.polygon([(0,0),(w,0),(w*0.6,h*0.35),(0,h*0.35)], fill=(255,255,255,26))
-    base.alpha_composite(shine, (x1,y1))
+    draw.rounded_rectangle(box, radius=26, outline=(190,210,235,200), width=2)
 
 # ---------- DRAW ----------
 
-def draw_thick_text(draw, xy, text, font, fill, stroke_width=2):
-    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0,0,0))
+def draw_thick_text(draw, xy, text, font, fill, stroke_width=1):
+    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(255,255,255))
 
 def human(n):
     if n >= 1e9: return f"{n/1e9:.2f}B"
@@ -136,17 +132,17 @@ def human(n):
 
 def generate_image(data):
     W,H = 1920,1080
-    bg = cinematic_bg(W,H)
+    bg = dreamy_bg(W,H)
     draw = ImageDraw.Draw(bg)
 
-    title_font = load_font(78)
+    title_font = load_font(74)
     sub_font   = load_font(26)
     name_font  = load_font(30)
     price_font = load_font(52)
     meta_font  = load_font(22)
 
-    draw_thick_text(draw, (64,36), "⚡ Crypto Dashboard", title_font, (230,240,255,255), 3)
-    draw_thick_text(draw, (64,124), "Live market snapshot • 24h Change & Volume", sub_font, (170,190,220,255), 2)
+    draw_thick_text(draw, (64,36), "Crypto Dashboard", title_font, (40,60,90,255), 1)
+    draw_thick_text(draw, (64,124), "Live market snapshot • 24h Change & Volume", sub_font, (80,110,150,255), 1)
 
     cols,pad,card_h = 3,36,250
     card_w = (W - pad*(cols+1)) // cols
@@ -156,27 +152,27 @@ def generate_image(data):
         cy = 190 + (i // cols) * (card_h + pad)
         box = (cx, cy, cx+card_w, cy+card_h)
 
-        creative_neon_card(bg, box)
+        soft_card(bg, box)
 
         try:
-            logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA").resize((60,60))
+            logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA").resize((56,56))
             bg.alpha_composite(logo, (cx+24, cy+18))
         except:
             pass
 
-        draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (235,245,255,255), 2)
+        draw_thick_text(draw, (cx+92, cy+22), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (50,80,120,255), 1)
 
         price_val = coin["current_price"]
         price_text = f"${price_val:.4f}" if coin["id"]=="toncoin" else f"${price_val:,}"
-        draw_thick_text(draw, (cx+24, cy+92), price_text, price_font, (235,245,255,255), 3)
+        draw_thick_text(draw, (cx+24, cy+92), price_text, price_font, (60,90,130,255), 1)
 
         ch = coin.get("price_change_percentage_24h", 0) or 0
         arrow = "▲" if ch>=0 else "▼"
-        ch_color = (34,197,94,255) if ch>=0 else (239,68,68,255)
-        draw_thick_text(draw, (cx+24, cy+154), f"24h {arrow} {ch:.2f}%", meta_font, ch_color, 2)
+        ch_color = (60,140,100,255) if ch>=0 else (180,90,90,255)
+        draw_thick_text(draw, (cx+24, cy+154), f"24h {arrow} {ch:.2f}%", meta_font, ch_color, 1)
 
         vol = coin.get("total_volume", 0) or 0
-        draw_thick_text(draw, (cx+24, cy+184), f"Vol: ${human(vol)}", meta_font, (200,210,230,255), 2)
+        draw_thick_text(draw, (cx+24, cy+184), f"Vol: ${human(vol)}", meta_font, (90,120,150,255), 1)
 
     buf = io.BytesIO()
     bg.convert("RGB").save(buf, "PNG", quality=95)
@@ -198,13 +194,13 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = [d for d in data if d["id"]!="toncoin"] + [ton]
 
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Neon Crypto Dashboard (TON 4 decimals)")
+        await update.message.reply_photo(photo=img, caption="🌿 Cozy Crypto Dashboard (TON 4 decimals)")
     except Exception as e:
         await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
         print(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — neon gradient crypto dashboard 🔥")
+    await update.message.reply_text("Send /prices — cozy pastel crypto dashboard 🍃")
 
 def main():
     token = os.environ.get("BOT_TOKEN")
