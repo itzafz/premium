@@ -1,7 +1,14 @@
-import os, io, requests, random
+import os
+import io
+import math
+import requests
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "PASTE_YOUR_BOT_TOKEN"
+
+API_URL = "https://api.coingecko.com/api/v3/coins/markets"
 
 COINS = [
     {"id": "bitcoin", "name": "Bitcoin", "symbol": "BTC"},
@@ -15,139 +22,110 @@ COINS = [
     {"id": "toncoin", "name": "Toncoin", "symbol": "TON"},
 ]
 
-API_URL = "https://api.coingecko.com/api/v3/coins/markets"
+# --------- FONTS (thick, bold) ----------
+def load_fonts():
+    try:
+        title = ImageFont.truetype("fonts/Poppins-Bold.ttf", 56)
+        price = ImageFont.truetype("fonts/Poppins-Bold.ttf", 42)
+        label = ImageFont.truetype("fonts/Poppins-Bold.ttf", 24)
+        small = ImageFont.truetype("fonts/Poppins-Bold.ttf", 20)
+    except:
+        title = ImageFont.load_default()
+        price = ImageFont.load_default()
+        label = ImageFont.load_default()
+        small = ImageFont.load_default()
+    return title, price, label, small
 
+TITLE_FONT, PRICE_FONT, LABEL_FONT, SMALL_FONT = load_fonts()
+
+# --------- FETCH PRICES (TON FIXED) ----------
 def fetch_prices():
     ids = ",".join([c["id"] for c in COINS])
     r = requests.get(API_URL, params={"vs_currency": "usd", "ids": ids, "sparkline": "false"}, timeout=15)
     r.raise_for_status()
-    return r.json()
+    data = r.json()
 
-def load_font(size, weight="black"):
-    for path in ("assets/Inter-Black.ttf", "assets/DejaVuSans-Bold.ttf", "assets/Inter-Bold.ttf"):
-        try:
-            return ImageFont.truetype(path, size)
-        except:
-            continue
-    return ImageFont.load_default()
+    if not any(c.get("id") == "toncoin" for c in data):
+        r2 = requests.get(API_URL, params={"vs_currency": "usd", "ids": "toncoin", "sparkline": "false"}, timeout=15)
+        r2.raise_for_status()
+        extra = r2.json()
+        if extra:
+            data.extend(extra)
 
-def cinematic_bg(w, h):
-    base = Image.new("RGB", (w, h), "#050811")
-    draw = ImageDraw.Draw(base)
+    order = {c["id"]: i for i, c in enumerate(COINS)}
+    data.sort(key=lambda x: order.get(x.get("id"), 999))
+    return data
 
-    for y in range(h):
-        r = int(5 + (20-5) * (y/h))
-        g = int(8 + (24-8) * (y/h))
-        b = int(17 + (50-17) * (y/h))
-        draw.line((0, y, w, y), fill=(r, g, b))
-
-    glow = Image.new("RGBA", (w, h), (0,0,0,0))
-    gdraw = ImageDraw.Draw(glow)
-    for _ in range(6):
-        cx = random.randint(0, w)
-        cy = random.randint(0, h)
-        radius = random.randint(180, 320)
-        color = random.choice([(56,189,248,90), (168,85,247,90)])
-        gdraw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=color)
-    glow = glow.filter(ImageFilter.GaussianBlur(60))
-    base = Image.alpha_composite(base.convert("RGBA"), glow)
-    return base
-
-def neon_card(base, box, glow_color=(56,189,248)):
-    glow = Image.new("RGBA", base.size, (0,0,0,0))
-    gdraw = ImageDraw.Draw(glow)
-    gdraw.rounded_rectangle(box, radius=28, fill=glow_color+(90,))
-    glow = glow.filter(ImageFilter.GaussianBlur(26))
-    base.alpha_composite(glow)
-
-def draw_thick_text(draw, xy, text, font, fill, stroke_width=2):
-    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0,0,0))
-
-def human(n):
-    if n >= 1e9: return f"{n/1e9:.2f}B"
-    if n >= 1e6: return f"{n/1e6:.2f}M"
-    if n >= 1e3: return f"{n/1e3:.2f}K"
-    return str(n)
-
+# --------- IMAGE GENERATOR ----------
 def generate_image(data):
-    W, H = 1920, 1080
-    bg = cinematic_bg(W, H)
-    draw = ImageDraw.Draw(bg)
+    W, H = 1280, 720  # 16:9
+    img = Image.new("RGB", (W, H), "#050811")
+    draw = ImageDraw.Draw(img)
 
-    title_font = load_font(78)
-    sub_font   = load_font(26)
-    name_font  = load_font(30)
-    price_font = load_font(52)
-    meta_font  = load_font(22)
+    # background glow
+    glow = Image.new("RGB", (W, H), "#050811")
+    gdraw = ImageDraw.Draw(glow)
+    gdraw.ellipse(( -200, -200, 600, 400), fill="#1e40af")
+    gdraw.ellipse(( 700, -150, 1400, 450), fill="#6d28d9")
+    glow = glow.filter(ImageFilter.GaussianBlur(140))
+    img = Image.blend(img, glow, 0.45)
+    draw = ImageDraw.Draw(img)
 
-    draw_thick_text(draw, (64, 36), "⚡ Crypto Dashboard", title_font, (230,240,255,255), 3)
-    draw_thick_text(draw, (64, 124), "Live market snapshot • 24h Change & Volume", sub_font, (170,190,220,255), 2)
+    draw.text((40, 20), "⚡ CRYPTO DASHBOARD", font=TITLE_FONT, fill="#cfe9ff")
 
     cols = 3
-    pad = 36
-    card_w = (W - pad*(cols+1)) // cols
-    card_h = 250
+    card_w = (W - 80) // cols
+    card_h = 150
+    x0, y0 = 40, 110
 
-    for i, coin in enumerate(data[:9]):
-        cx = pad + (i % cols) * (card_w + pad)
-        cy = 190 + (i // cols) * (card_h + pad)
-        box = (cx, cy, cx+card_w, cy+card_h)
+    for i, coin in enumerate(data):
+        col = i % cols
+        row = i // cols
+        x = x0 + col * card_w
+        y = y0 + row * (card_h + 20)
 
-        neon_card(bg, box, (168,85,247))
-        draw.rounded_rectangle(box, radius=28, fill=(11,16,32,235), outline=(56,189,248,220), width=3)
+        # card bg
+        draw.rounded_rectangle((x, y, x + card_w - 20, y + card_h), radius=24, fill="#0b1020", outline="#38bdf8", width=2)
 
+        # logo
         try:
-            logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA")
-            logo = logo.resize((60,60))
-            bg.alpha_composite(logo, (cx+24, cy+18))
+            logo = Image.open(requests.get(coin["image"], stream=True).raw).convert("RGBA")
+            logo = logo.resize((48, 48))
+            img.paste(logo, (x + 16, y + 16), logo)
         except:
             pass
 
-        draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (235,245,255,255), 2)
+        name = f'{coin["name"]} ({coin["symbol"].upper()})'
+        price = f'${coin["current_price"]:,.2f}'
+        change = coin.get("price_change_percentage_24h") or 0
+        vol = coin.get("total_volume") or 0
 
-        price = f"${coin['current_price']:,}"
-        draw_thick_text(draw, (cx+24, cy+92), price, price_font, (168,85,247,255), 3)
+        change_color = "#22c55e" if change >= 0 else "#ef4444"
+        change_txt = f'{change:+.2f}%'
+        vol_txt = f'Vol 24h: ${vol/1e9:.2f}B'
 
-        ch = coin.get("price_change_percentage_24h", 0) or 0
-        arrow = "▲" if ch >= 0 else "▼"
-        ch_color = (34,197,94,255) if ch >= 0 else (239,68,68,255)
-        draw_thick_text(draw, (cx+24, cy+154), f"24h {arrow} {ch:.2f}%", meta_font, ch_color, 2)
-
-        vol = coin.get("total_volume", 0) or 0
-        draw_thick_text(draw, (cx+24, cy+184), f"Vol: ${human(vol)}", meta_font, (170,185,210,255), 2)
+        draw.text((x + 80, y + 18), name, font=LABEL_FONT, fill="#e5e7eb")
+        draw.text((x + 80, y + 52), price, font=PRICE_FONT, fill="#a78bfa")
+        draw.text((x + 80, y + 100), change_txt, font=LABEL_FONT, fill=change_color)
+        draw.text((x + card_w - 240, y + 100), vol_txt, font=SMALL_FONT, fill="#94a3b8")
 
     buf = io.BytesIO()
-    bg.convert("RGB").save(buf, format="PNG", quality=95)
+    img.save(buf, format="PNG")
     buf.seek(0)
     return buf
 
+# --------- TELEGRAM HANDLER ----------
 async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        data = fetch_prices()
+    await update.message.reply_text("📸 Dashboard bana raha hoon...")
+    data = fetch_prices()
+    img = generate_image(data)
+    await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Prices (16:9, Pro Style)")
 
-        # Ensure TON price present
-        ids = [d["id"] for d in data]
-        if "toncoin" not in ids:
-            data.append({"id":"toncoin","name":"Toncoin","symbol":"TON","current_price":0,"price_change_percentage_24h":0,"total_volume":0,"image":""})
-
-        img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON included)")
-    except Exception as e:
-        await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
-        print(e)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — updated premium dashboard with TON price 📸")
-
+# --------- BOT START ----------
 def main():
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        raise RuntimeError("BOT_TOKEN env variable missing")
-
-    app = ApplicationBuilder().token(token).build()
-    app.add_handler(CommandHandler("start", start))
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("prices", prices))
-    print("🤖 Bot running...")
+    print("Bot running...")
     app.run_polling()
 
 if __name__ == "__main__":
