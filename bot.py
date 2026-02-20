@@ -1,4 +1,4 @@
-import os, io, requests
+import os, io, requests, math, random
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -24,57 +24,71 @@ def fetch_prices():
     return r.json()
 
 def load_font(size, weight="black"):
-    # Always try EXTRA BOLD fonts first
-    for path in (
-        "assets/Inter-Black.ttf",
-        "assets/DejaVuSans-Bold.ttf",
-        "assets/Inter-Bold.ttf",
-    ):
+    for path in ("assets/Inter-Black.ttf", "assets/DejaVuSans-Bold.ttf", "assets/Inter-Bold.ttf"):
         try:
             return ImageFont.truetype(path, size)
         except:
             continue
     return ImageFont.load_default()
 
-def gradient_bg(w, h):
-    img = Image.new("RGB", (w, h), "#050811")
-    draw = ImageDraw.Draw(img)
+def cinematic_bg(w, h):
+    base = Image.new("RGB", (w, h), "#050811")
+    draw = ImageDraw.Draw(base)
+
+    # Gradient
     for y in range(h):
-        r = int(5 + (56-5) * (y/h))
-        g = int(8 + (189-8) * (y/h))
-        b = int(17 + (248-17) * (y/h))
-        draw.line((0, y, w, y), fill=(r//3, g//3, b//3))
-    return img
+        r = int(5 + (20-5) * (y/h))
+        g = int(8 + (24-8) * (y/h))
+        b = int(17 + (50-17) * (y/h))
+        draw.line((0, y, w, y), fill=(r, g, b))
+
+    # Glow orbs
+    glow = Image.new("RGBA", (w, h), (0,0,0,0))
+    gdraw = ImageDraw.Draw(glow)
+    for _ in range(6):
+        cx = random.randint(0, w)
+        cy = random.randint(0, h)
+        radius = random.randint(180, 320)
+        color = random.choice([(56,189,248,90), (168,85,247,90)])
+        gdraw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=color)
+    glow = glow.filter(ImageFilter.GaussianBlur(60))
+    base = Image.alpha_composite(base.convert("RGBA"), glow)
+    return base
 
 def neon_card(base, box, glow_color=(56,189,248)):
     glow = Image.new("RGBA", base.size, (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
     gdraw.rounded_rectangle(box, radius=28, fill=glow_color+(90,))
-    glow = glow.filter(ImageFilter.GaussianBlur(24))
+    glow = glow.filter(ImageFilter.GaussianBlur(26))
     base.alpha_composite(glow)
 
-def draw_thick_text(draw, xy, text, font, fill, stroke_fill=(0,0,0), stroke_width=2):
-    # Stroke = mota + readable
-    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=stroke_fill)
+def draw_thick_text(draw, xy, text, font, fill, stroke_width=2):
+    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0,0,0))
+
+def human(n):
+    if n >= 1e9: return f"{n/1e9:.2f}B"
+    if n >= 1e6: return f"{n/1e6:.2f}M"
+    if n >= 1e3: return f"{n/1e3:.2f}K"
+    return str(n)
 
 def generate_image(data):
-    W, H = 1920, 1080  # 16:9
-    bg = gradient_bg(W, H).convert("RGBA")
+    W, H = 1920, 1080
+    bg = cinematic_bg(W, H)
     draw = ImageDraw.Draw(bg)
 
-    title_font = load_font(76)   # EXTRA BIG + THICK
+    title_font = load_font(78)
     sub_font   = load_font(26)
     name_font  = load_font(30)
-    price_font = load_font(52)   # THICK PRICE
-    meta_font  = load_font(24)
+    price_font = load_font(52)
+    meta_font  = load_font(22)
 
-    draw_thick_text(draw, (64, 36), "⚡ Crypto Dashboard", title_font, (220,235,255,255), stroke_width=3)
-    draw_thick_text(draw, (64, 120), "Live market snapshot • Auto refresh", sub_font, (160,180,210,255), stroke_width=2)
+    draw_thick_text(draw, (64, 36), "⚡ Crypto Dashboard", title_font, (230,240,255,255), 3)
+    draw_thick_text(draw, (64, 124), "Live market snapshot • 24h change & volume", sub_font, (170,190,220,255), 2)
 
     cols = 3
     pad = 36
     card_w = (W - pad*(cols+1)) // cols
-    card_h = 240
+    card_h = 250
 
     for i, coin in enumerate(data[:9]):
         cx = pad + (i % cols) * (card_w + pad)
@@ -91,13 +105,17 @@ def generate_image(data):
         except:
             pass
 
-        draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (230,240,255,255), stroke_width=2)
+        draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (235,245,255,255), 2)
         price = f"${coin['current_price']:,}"
-        draw_thick_text(draw, (cx+24, cy+92), price, price_font, (168,85,247,255), stroke_width=3)
+        draw_thick_text(draw, (cx+24, cy+92), price, price_font, (168,85,247,255), 3)
 
         ch = coin.get("price_change_percentage_24h", 0) or 0
-        emoji = "🟢" if ch >= 0 else "🔴"
-        draw_thick_text(draw, (cx+24, cy+154), f"24h {emoji} {ch:.2f}%", meta_font, (170,185,210,255), stroke_width=2)
+        arrow = "▲" if ch >= 0 else "▼"
+        ch_color = (34,197,94,255) if ch >= 0 else (239,68,68,255)
+        draw_thick_text(draw, (cx+24, cy+154), f"24h {arrow} {ch:.2f}%", meta_font, ch_color, 2)
+
+        vol = coin.get("total_volume", 0) or 0
+        draw_thick_text(draw, (cx+24, cy+184), f"Vol: ${human(vol)}", meta_font, (170,185,210,255), 2)
 
     buf = io.BytesIO()
     bg.convert("RGB").save(buf, format="PNG", quality=95)
@@ -108,13 +126,13 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = fetch_prices()
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (16:9 • Bold Font)")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON + 24h % + Volume)")
     except Exception as e:
-        await update.message.reply_text("⚠️ Render fail ho gaya. Thoda baad try karo.")
+        await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
         print(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — mota/thick font wala premium dashboard milega 📸")
+    await update.message.reply_text("Send /prices — premium 16:9 crypto dashboard image milega 📸")
 
 def main():
     token = os.environ.get("BOT_TOKEN")
