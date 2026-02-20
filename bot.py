@@ -23,15 +23,18 @@ def fetch_prices():
     r.raise_for_status()
     return r.json()
 
-def load_font(size, weight="regular"):
-    try:
-        if weight == "black":
-            return ImageFont.truetype("assets/Inter-Black.ttf", size)
-        if weight == "bold":
-            return ImageFont.truetype("assets/Inter-Bold.ttf", size)
-        return ImageFont.truetype("assets/Inter-Regular.ttf", size)
-    except:
-        return ImageFont.load_default()
+def load_font(size, weight="black"):
+    # Always try EXTRA BOLD fonts first
+    for path in (
+        "assets/Inter-Black.ttf",
+        "assets/DejaVuSans-Bold.ttf",
+        "assets/Inter-Bold.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, size)
+        except:
+            continue
+    return ImageFont.load_default()
 
 def gradient_bg(w, h):
     img = Image.new("RGB", (w, h), "#050811")
@@ -46,51 +49,55 @@ def gradient_bg(w, h):
 def neon_card(base, box, glow_color=(56,189,248)):
     glow = Image.new("RGBA", base.size, (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
-    gdraw.rounded_rectangle(box, radius=28, fill=glow_color+(80,))
-    glow = glow.filter(ImageFilter.GaussianBlur(22))
+    gdraw.rounded_rectangle(box, radius=28, fill=glow_color+(90,))
+    glow = glow.filter(ImageFilter.GaussianBlur(24))
     base.alpha_composite(glow)
+
+def draw_thick_text(draw, xy, text, font, fill, stroke_fill=(0,0,0), stroke_width=2):
+    # Stroke = mota + readable
+    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=stroke_fill)
 
 def generate_image(data):
     W, H = 1920, 1080  # 16:9
     bg = gradient_bg(W, H).convert("RGBA")
     draw = ImageDraw.Draw(bg)
 
-    title_font = load_font(68, "black")
-    sub_font   = load_font(22, "bold")
-    name_font  = load_font(26, "bold")
-    price_font = load_font(44, "black")
-    meta_font  = load_font(20, "bold")
+    title_font = load_font(76)   # EXTRA BIG + THICK
+    sub_font   = load_font(26)
+    name_font  = load_font(30)
+    price_font = load_font(52)   # THICK PRICE
+    meta_font  = load_font(24)
 
-    draw.text((64, 36), "⚡ Crypto Dashboard", fill=(210,230,255,255), font=title_font)
-    draw.text((64, 110), "Live market snapshot • Auto refresh", fill=(150,170,200,255), font=sub_font)
+    draw_thick_text(draw, (64, 36), "⚡ Crypto Dashboard", title_font, (220,235,255,255), stroke_width=3)
+    draw_thick_text(draw, (64, 120), "Live market snapshot • Auto refresh", sub_font, (160,180,210,255), stroke_width=2)
 
     cols = 3
     pad = 36
     card_w = (W - pad*(cols+1)) // cols
-    card_h = 220
+    card_h = 240
 
     for i, coin in enumerate(data[:9]):
         cx = pad + (i % cols) * (card_w + pad)
-        cy = 170 + (i // cols) * (card_h + pad)
+        cy = 190 + (i // cols) * (card_h + pad)
         box = (cx, cy, cx+card_w, cy+card_h)
 
         neon_card(bg, box, (168,85,247))
-        draw.rounded_rectangle(box, radius=26, fill=(11,16,32,235), outline=(56,189,248,200), width=2)
+        draw.rounded_rectangle(box, radius=28, fill=(11,16,32,235), outline=(56,189,248,220), width=3)
 
         try:
             logo = Image.open(io.BytesIO(requests.get(coin["image"], timeout=10).content)).convert("RGBA")
-            logo = logo.resize((56,56))
-            bg.alpha_composite(logo, (cx+22, cy+18))
+            logo = logo.resize((60,60))
+            bg.alpha_composite(logo, (cx+24, cy+18))
         except:
             pass
 
-        draw.text((cx+92, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", fill=(220,230,255,255), font=name_font)
+        draw_thick_text(draw, (cx+96, cy+20), f"{coin['name']} ({coin['symbol'].upper()})", name_font, (230,240,255,255), stroke_width=2)
         price = f"${coin['current_price']:,}"
-        draw.text((cx+22, cy+86), price, fill=(168,85,247,255), font=price_font)
+        draw_thick_text(draw, (cx+24, cy+92), price, price_font, (168,85,247,255), stroke_width=3)
 
         ch = coin.get("price_change_percentage_24h", 0) or 0
         emoji = "🟢" if ch >= 0 else "🔴"
-        draw.text((cx+22, cy+146), f"24h {emoji} {ch:.2f}%", fill=(148,163,184,255), font=meta_font)
+        draw_thick_text(draw, (cx+24, cy+154), f"24h {emoji} {ch:.2f}%", meta_font, (170,185,210,255), stroke_width=2)
 
     buf = io.BytesIO()
     bg.convert("RGB").save(buf, format="PNG", quality=95)
@@ -101,13 +108,13 @@ async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = fetch_prices()
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (16:9)")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (16:9 • Bold Font)")
     except Exception as e:
-        await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
+        await update.message.reply_text("⚠️ Render fail ho gaya. Thoda baad try karo.")
         print(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — premium 16:9 crypto dashboard image milega 📸")
+    await update.message.reply_text("Send /prices — mota/thick font wala premium dashboard milega 📸")
 
 def main():
     token = os.environ.get("BOT_TOKEN")
