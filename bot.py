@@ -21,21 +21,9 @@ def fetch_prices():
     ids = ",".join([c["id"] for c in COINS])
     r = requests.get(API_URL, params={"vs_currency": "usd", "ids": ids, "sparkline": "false"}, timeout=15)
     r.raise_for_status()
-    data = r.json()
+    return r.json()
 
-    # TON missing fix
-    if not any(c.get("id") == "toncoin" for c in data):
-        r2 = requests.get(API_URL, params={"vs_currency": "usd", "ids": "toncoin", "sparkline": "false"}, timeout=15)
-        r2.raise_for_status()
-        extra = r2.json()
-        if extra:
-            data.extend(extra)
-
-    order = {c["id"]: i for i, c in enumerate(COINS)}
-    data.sort(key=lambda x: order.get(x.get("id"), 999))
-    return data
-
-def load_font(size):
+def load_font(size, weight="black"):
     for path in ("assets/Inter-Black.ttf", "assets/DejaVuSans-Bold.ttf", "assets/Inter-Bold.ttf"):
         try:
             return ImageFont.truetype(path, size)
@@ -136,14 +124,20 @@ def generate_image(data):
 async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = fetch_prices()
+
+        # Ensure TON price present
+        ids = [d["id"] for d in data]
+        if "toncoin" not in ids:
+            data.append({"id":"toncoin","name":"Toncoin","symbol":"TON","current_price":0,"price_change_percentage_24h":0,"total_volume":0,"image":""})
+
         img = generate_image(data)
-        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON fixed ✅)")
+        await update.message.reply_photo(photo=img, caption="⚡ Live Crypto Dashboard (TON included)")
     except Exception as e:
         await update.message.reply_text("⚠️ Dashboard render nahi ho pa raha. Thoda baad try karo.")
         print(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /prices — premium crypto dashboard 📸")
+    await update.message.reply_text("Send /prices — updated premium dashboard with TON price 📸")
 
 def main():
     token = os.environ.get("BOT_TOKEN")
