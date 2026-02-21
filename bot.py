@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = ""
+TOKEN = "7663073456:AAER0VSNRmDBpHnzWVXgqpZ-y0zkE_sUf0g"
 BACKGROUND_IMAGE = "https://ibb.co/Xfs3f01k"  # use any nice background
 FONT_PATH = "arial.ttf"  # change if you have custom font
 
