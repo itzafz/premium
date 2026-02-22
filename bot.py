@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or "7663073456:AAGKttb2SAxgKozbEcit8a3xzBlkmu4Ua3U"
 
 # 🔽 YAHAN APNI IMAGE KA DIRECT LINK DALO (PNG/JPG)
-CUSTOM_IMAGE_URL = "https://example.com/your-image.png"  # <-- yahin change karo
+CUSTOM_IMAGE_URL = "https://sacred-beige-wylsnp2rgo.edgeone.app/file_00000000409871fa8cd698965f3507a1.png"  # <-- yahin change karo
 
 def get_ton_price():
     url = "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd"
