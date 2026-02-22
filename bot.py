@@ -2,7 +2,7 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "7663073456:AAER0VSNRmDBpHnzWVXgqpZ"
+BOT_TOKEN = "7663073456:AAGKttb2SAxgKozbEcit8a3xzBlkmu4Ua3U"
 
 async def ton_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd&include_24hr_change=true"
