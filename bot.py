@@ -2,7 +2,7 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+BOT_TOKEN = "7663073456:AAGKttb2SAxgKozbEcit8a3xzBlkmu4Ua3U"
 
 async def start(update: Update, context):
     await update.message.reply_text("Bada link bhejo, main short karke de dunga 😄")
