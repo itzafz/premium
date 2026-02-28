@@ -1,20 +1,13 @@
-import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
+from telethon import TelegramClient, events
 
-BOT_TOKEN = "7663073456:AAGKttb2SAxgKozbEcit8a3xzBlkmu4Ua3U"
+api_id = 30536759      # yahan apna API ID
+api_hash = "2633cf40ebefbc2a2b62a4439978e41c"
 
-async def start(update: Update, context):
-    await update.message.reply_text("Bada link bhejo, main short karke de dunga 😄")
+client = TelegramClient("userbot", api_id, api_hash)
 
-async def shorten(update: Update, context):
-    long_url = update.message.text.strip()
-    api_url = f"https://tinyurl.com/api-create.php?url={long_url}"
-    short_url = requests.get(api_url).text
-    await update.message.reply_text(f"Short link: {short_url}")
+@client.on(events.NewMessage(incoming=True))
+async def handler(event):
+    await event.reply("I'm here")
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, shorten))
-
-app.run_polling()
+client.start()
+client.run_until_disconnected()
