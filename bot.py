@@ -4,20 +4,32 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
 # ========== CONFIG (Render Env Vars se aayega) ==========
-api_id = int(os.environ.get("API_ID", "0"))
-api_hash = os.environ.get("API_HASH", "")
+api_id_raw = os.environ.get("API_ID", "").strip()
+api_hash = os.environ.get("API_HASH", "").strip()
 string_session = os.environ.get("STRING_SESSION", "").strip()
 # ======================================================
 
 logging.basicConfig(level=logging.INFO)
 
-if not api_id or not api_hash or not string_session:
-    raise ValueError("API_ID / API_HASH / STRING_SESSION missing. Render env vars check karo.")
+# ---- Strong validation ----
+if not api_id_raw.isdigit():
+    raise ValueError(f"Invalid API_ID: {repr(api_id_raw)}")
+
+api_id = int(api_id_raw)
+
+if not api_hash:
+    raise ValueError("API_HASH missing. Render env vars check karo.")
+
+if not string_session:
+    raise ValueError("STRING_SESSION missing. Render env vars check karo.")
+
+# Debug (temporary – deploy ke baad hata sakte ho)
+print("STRING_SESSION length =", len(string_session))
 
 try:
     session = StringSession(string_session)
 except Exception as e:
-    raise ValueError(f"Invalid STRING_SESSION: {e}")
+    raise ValueError(f"Invalid STRING_SESSION format: {e}")
 
 client = TelegramClient(session, api_id, api_hash)
 
