@@ -1,50 +1,37 @@
-import os
 import logging
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-# ========== CONFIG (Render Env Vars se aayega) ==========
-api_id_raw = os.environ.get("API_ID", "").strip()
-api_hash = os.environ.get("API_HASH", "").strip()
-string_session = os.environ.get("STRING_SESSION", "").strip()
-# ======================================================
+# ====== YAHAN APNI DETAILS BHARO ======
+API_ID = 30536759            # yahan apna API_ID dalo (number)
+API_HASH = "2633cf40ebefbc2a2b62a4439978e41c"  # yahan apna API_HASH dalo (string)
+STRING_SESSION = "BQHR9DcAYKBUqtckjO1kAlwnx3GBLIXOSMSCl5BJaRZRHuGMEgE5FHadXLl2uIc67fYK95gD9thvdynjknRzXk4gv-7tmQXKQp7ZTEug0YX3ysTQjc49P6Ve3GMDFe5avRnzmGCX2I51p5LPcoIQoFjvkvkw3q9EUup7wsjvCnnW1i1tLHTGO5LoGeEWJLAmm8R2hShGpUw2TA1OPHsUDtD0FllxsieLtaZGnR09zlbBxEJu4DUjEoCUhYfQwdUJYmdIHAELzV1qqROTV5PMsS4R32KJBsFVPE3KqS4dBvsSPUE_HPq_EnS0san7mRBJPW09PJHlc1CSSXpPgZCcp3OKQNJ4bAAAAAHF5d9fAA"  # yahan apni StringSession paste karo
+# ====================================
 
 logging.basicConfig(level=logging.INFO)
 
-# ---- Strong validation ----
-if not api_id_raw.isdigit():
-    raise ValueError(f"Invalid API_ID: {repr(api_id_raw)}")
+if not isinstance(API_ID, int):
+    raise ValueError("API_ID number hona chahiye")
 
-api_id = int(api_id_raw)
+if not API_HASH:
+    raise ValueError("API_HASH missing")
 
-if not api_hash:
-    raise ValueError("API_HASH missing. Render env vars check karo.")
+if not STRING_SESSION:
+    raise ValueError("STRING_SESSION missing")
 
-if not string_session:
-    raise ValueError("STRING_SESSION missing. Render env vars check karo.")
+print("STRING_SESSION length =", len(STRING_SESSION))
 
-# Debug (temporary – deploy ke baad hata sakte ho)
-print("STRING_SESSION length =", len(string_session))
-
-try:
-    session = StringSession(string_session)
-except Exception as e:
-    raise ValueError(f"Invalid STRING_SESSION format: {e}")
-
-client = TelegramClient(session, api_id, api_hash)
+client = TelegramClient(StringSession(STRING_SESSION), API_ID, API_HASH)
 
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
-    try:
-        print("Message:", event.raw_text)
-        await event.reply("I'm here")
-    except Exception as e:
-        print("Reply error:", e)
+    if event.is_private:
+        await event.reply("Join channel")
 
 async def main():
     print("Starting userbot...")
     await client.start()
-    print("Userbot is running. Send me a message!")
+    print("Userbot running...")
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
